@@ -1,0 +1,61 @@
+# Node.js dependencies
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Environment variables
+!.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+debug.log*
+
+# Drizzle ORM migrations & metadata
+/drizzle/meta/
+/drizzle/*.sql
+
+# Build artifacts
+dist/
+build/
+.out/
+.next/
+.vercel/
+
+# Temporary files
+*.cache
+*.swp
+*.swo
+*.swn
+
+# IDE and Editor files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Jest test coverage
+coverage/
+
+# ESLint cache
+.eslintcache
+
+# Nodemon restart files
+nodemon-debug.log
+
+# Debugger files
+*.pid
+*.seed
+
+# Miscellaneous
+*.bak
+*.orig
