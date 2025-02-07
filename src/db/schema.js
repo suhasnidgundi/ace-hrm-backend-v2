@@ -21,7 +21,7 @@ export const candidates = mysqlTable("candidates", {
   email: varchar("email", { length: 255 }).unique().notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   dateOfBirth: datetime("date_of_birth").notNull(),
-  maritalStatus: mysqlEnum("marital_status", ["Married", "Unmarried", "Separated"]),
+  maritalStatus: mysqlEnum("marital_status", ["Single", "Married", "Divorced", "Separated", "Widowed"]),
   currentAddress: text("current_address"),
   permanentAddress: text("permanent_address"),
   referralSource: varchar("referral_source", { length: 100 }),
@@ -98,7 +98,7 @@ export const interviewRounds = mysqlTable("interview_rounds", {
 
 // ----------------------------------------------------------------------------------------------
 
-// User Authentication Schema
+// ✅ User Authentication Schema
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
   email: varchar("email", { length: 255 }).unique().notNull(),
@@ -121,7 +121,7 @@ export const sessions = mysqlTable("sessions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// Employee Core Information
+// ✅ Employee Core Information
 export const employees = mysqlTable("employees", {
   id: int("id").primaryKey().autoincrement(),
   userId: int("user_id").references(() => users.id), // Link to authentication
@@ -246,7 +246,7 @@ export const employee_salary = mysqlTable("employee_salary", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
-// Bank Information
+// ✅ Bank Information
 export const employee_bank_details = mysqlTable("employee_bank_details", {
   id: int("id").primaryKey().autoincrement(),
   employeeId: int("employee_id").references(() => employees.id),
@@ -258,7 +258,7 @@ export const employee_bank_details = mysqlTable("employee_bank_details", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
-// Departments
+// ✅ Departments
 export const departments = mysqlTable("departments", {
   id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -267,7 +267,7 @@ export const departments = mysqlTable("departments", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
-// Job Designations
+// ✅ Job Designations
 export const designations = mysqlTable("designations", {
   id: int("id").primaryKey().autoincrement(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -276,7 +276,7 @@ export const designations = mysqlTable("designations", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
-// Job and Department Info
+// ✅ Job and Department Info
 export const employee_professional_details = mysqlTable(
   "employee_professional_details",
   {
@@ -295,7 +295,7 @@ export const employee_professional_details = mysqlTable(
   }
 );
 
-// Contact Details
+// ✅ Contact Details
 export const employee_contacts = mysqlTable("employee_contacts", {
   id: int("id").primaryKey().autoincrement(),
   employeeId: int("employee_id").references(() => employees.id),

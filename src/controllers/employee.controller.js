@@ -1,15 +1,38 @@
 import { employees } from "../db/schema.js";
 import { eq, sql } from "drizzle-orm";
 import db from "../db/index.js";
+import { logger } from "../config/logger.js";
 
 export const createEmployee = async (req, res) => {
   try {
-    const [employee] = await db.insert(employees).values(req.body).returning();
-    res.status(201).json(employee);
+    // Convert date strings to Date objects
+    const employeeData = {
+      ...req.body,
+      dateOfBirth: new Date(req.body.dateOfBirth)
+    };
+
+    const result = await db.insert(employees)
+      .values(employeeData)
+      .execute();
+    
+    const insertedId = result.insertId;
+
+    const employee = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, insertedId));
+
+    logger.info(`Employee created successfully with ID: ${insertedId}`);
+    res.status(201).json(employee[0]);
   } catch (error) {
+    logger.error('Employee Controller CreateEmployee:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(400).json({ error: error.message });
   }
 };
+
 
 // Add pagination
 export const getEmployees = async (req, res) => {
@@ -58,17 +81,33 @@ export const getEmployee = async (req, res) => {
 
 export const updateEmployee = async (req, res) => {
   try {
-    const [employee] = await db
+    // Convert date strings to Date objects if present
+    const employeeData = {
+      ...req.body,
+      dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : undefined
+    };
+
+    await db
       .update(employees)
-      .set(req.body)
-      .where(eq("id", req.params.id))
-      .returning();
-    res.json(employee);
+      .set(employeeData)
+      .where(eq(employees.id, req.params.id))
+      .execute();
+
+    const updatedEmployee = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.id, req.params.id));
+
+    logger.info(`Employee updated successfully: ${req.params.id}`);
+    res.json(updatedEmployee[0]);
   } catch (error) {
+    logger.error('Employee Controller UpdateEmployee:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(400).json({ error: error.message });
   }
 };
-
 export const deleteEmployee = async (req, res) => {
   try {
     await db.delete(employees).where(eq("id", req.params.id)).execute();

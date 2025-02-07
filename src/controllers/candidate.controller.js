@@ -5,7 +5,8 @@ import {
   candidateExperience,
   candidateReferences,
 } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { logger } from "../config/logger.js";
 
 // Verify candidate by email
 export const verifyCandidate = async (req, res) => {
@@ -139,22 +140,69 @@ export const getCandidateProgress = async (req, res) => {
   }
 };
 
-// Register new candidate
 export const registerCandidate = async (req, res) => {
   try {
-    const candidateData = req.body;
-    
+    const allowedMaritalStatus = [
+      "Single",
+      "Married",
+      "Divorced",
+      "Separated",
+      "Widowed",
+    ];
+
+    // Validate marital status
+    if (
+      req.body.maritalStatus &&
+      !allowedMaritalStatus.includes(req.body.maritalStatus)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid marital status. Allowed values are: ${allowedMaritalStatus.join(
+          ", "
+        )}`,
+      });
+    }
+
+    // Convert date string to Date object for dateOfBirth
+    const candidateData = {
+      ...req.body,
+      dateOfBirth: new Date(req.body.dateOfBirth),
+    };
+
+    // Insert the candidate
+    const result = await db.insert(candidates).values(candidateData).execute();
+
+    // Fetch the newly inserted candidate
     const [newCandidate] = await db
-      .insert(candidates)
-      .values(candidateData)
-      .returning();
+      .select()
+      .from(candidates)
+      .where(eq(candidates.id, result.insertId));
+
+    logger.info("Candidate registered successfully", {
+      candidateId: result.insertId,
+    });
 
     res.json({
       success: true,
       data: newCandidate,
     });
   } catch (error) {
-    console.error("Register candidate error:", error);
+    logger.error("Register candidate error:", {
+      error: error.message,
+      stack: error.stack,
+      candidateData: req.body,
+    });
+
+    // Enhanced error handling
+    if (error.code === "WARN_DATA_TRUNCATED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid data format. Please check all field values match the required format.",
+        details: error.sqlMessage,
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Failed to register candidate",
@@ -166,27 +214,47 @@ export const registerCandidate = async (req, res) => {
 export const updateCandidateInfo = async (req, res) => {
   try {
     const { candidateId } = req.params;
-    const updateData = req.body;
+    const updateData = {
+      ...req.body,
+      dateOfBirth: req.body.dateOfBirth
+        ? new Date(req.body.dateOfBirth)
+        : undefined,
+    };
 
-    const [updatedCandidate] = await db
+    // Update the candidate
+    await db
       .update(candidates)
       .set(updateData)
       .where(eq(candidates.id, candidateId))
-      .returning();
+      .execute();
+
+    // Fetch the updated candidate
+    const [updatedCandidate] = await db
+      .select()
+      .from(candidates)
+      .where(eq(candidates.id, candidateId));
 
     if (!updatedCandidate) {
+      logger.warn("Candidate not found for update", { candidateId });
       return res.status(404).json({
         success: false,
         message: "Candidate not found",
       });
     }
 
+    logger.info("Candidate updated successfully", { candidateId });
+
     res.json({
       success: true,
       data: updatedCandidate,
     });
   } catch (error) {
-    console.error("Update candidate error:", error);
+    logger.error("Update candidate error:", {
+      error: error.message,
+      stack: error.stack,
+      candidateId: req.params.candidateId,
+      updateData: req.body,
+    });
     res.status(500).json({
       success: false,
       message: "Failed to update candidate information",
@@ -200,17 +268,34 @@ export const addQualification = async (req, res) => {
     const { candidateId } = req.params;
     const qualificationData = { ...req.body, candidateId };
 
-    const [newQualification] = await db
+    // Insert qualification
+    const result = await db
       .insert(candidateQualifications)
       .values(qualificationData)
-      .returning();
+      .execute();
+
+    // Fetch the newly inserted qualification
+    const [newQualification] = await db
+      .select()
+      .from(candidateQualifications)
+      .where(eq(candidateQualifications.id, result.insertId));
+
+    logger.info("Qualification added successfully", {
+      candidateId,
+      qualificationId: result.insertId,
+    });
 
     res.json({
       success: true,
       data: newQualification,
     });
   } catch (error) {
-    console.error("Add qualification error:", error);
+    logger.error("Add qualification error:", {
+      error: error.message,
+      stack: error.stack,
+      candidateId: req.params.candidateId,
+      qualificationData: req.body,
+    });
     res.status(500).json({
       success: false,
       message: "Failed to add qualification",
@@ -247,17 +332,34 @@ export const addExperience = async (req, res) => {
     const { candidateId } = req.params;
     const experienceData = { ...req.body, candidateId };
 
-    const [newExperience] = await db
+    // Insert experience
+    const result = await db
       .insert(candidateExperience)
       .values(experienceData)
-      .returning();
+      .execute();
+
+    // Fetch the newly inserted experience
+    const [newExperience] = await db
+      .select()
+      .from(candidateExperience)
+      .where(eq(candidateExperience.id, result.insertId));
+
+    logger.info("Experience added successfully", {
+      candidateId,
+      experienceId: result.insertId,
+    });
 
     res.json({
       success: true,
       data: newExperience,
     });
   } catch (error) {
-    console.error("Add experience error:", error);
+    logger.error("Add experience error:", {
+      error: error.message,
+      stack: error.stack,
+      candidateId: req.params.candidateId,
+      experienceData: req.body,
+    });
     res.status(500).json({
       success: false,
       message: "Failed to add experience",
@@ -294,17 +396,34 @@ export const addReference = async (req, res) => {
     const { candidateId } = req.params;
     const referenceData = { ...req.body, candidateId };
 
-    const [newReference] = await db
+    // Insert reference
+    const result = await db
       .insert(candidateReferences)
       .values(referenceData)
-      .returning();
+      .execute();
+
+    // Fetch the newly inserted reference
+    const [newReference] = await db
+      .select()
+      .from(candidateReferences)
+      .where(eq(candidateReferences.id, result.insertId));
+
+    logger.info("Reference added successfully", {
+      candidateId,
+      referenceId: result.insertId,
+    });
 
     res.json({
       success: true,
       data: newReference,
     });
   } catch (error) {
-    console.error("Add reference error:", error);
+    logger.error("Add reference error:", {
+      error: error.message,
+      stack: error.stack,
+      candidateId: req.params.candidateId,
+      referenceData: req.body,
+    });
     res.status(500).json({
       success: false,
       message: "Failed to add reference",
