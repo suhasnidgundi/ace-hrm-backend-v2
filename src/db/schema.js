@@ -11,6 +11,93 @@ import {
   decimal,
 } from "drizzle-orm/mysql-core";
 
+// Candidate Registration
+export const candidates = mysqlTable("candidates", {
+  id: int("id").primaryKey().autoincrement(),
+  salutation: mysqlEnum("salutation", ["Mr", "Ms", "Mrs", "Dr", "Prof"]),
+  firstName: varchar("first_name", { length: 50 }).notNull(),
+  middleName: varchar("middle_name", { length: 50 }),
+  lastName: varchar("last_name", { length: 50 }).notNull(),
+  email: varchar("email", { length: 255 }).unique().notNull(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  dateOfBirth: datetime("date_of_birth").notNull(),
+  maritalStatus: mysqlEnum("marital_status", ["Married", "Unmarried", "Separated"]),
+  currentAddress: text("current_address"),
+  permanentAddress: text("permanent_address"),
+  referralSource: varchar("referral_source", { length: 100 }),
+  postApplied: varchar("post_applied", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// Professional Qualifications
+export const candidateQualifications = mysqlTable("candidate_qualifications", {
+  id: int("id").primaryKey().autoincrement(),
+  candidateId: int("candidate_id").references(() => candidates.id),
+  degree: varchar("degree", { length: 100 }).notNull(),
+  yearOfPassing: varchar("year_of_passing", { length: 4 }).notNull(),
+  boardUniversity: varchar("board_university", { length: 255 }).notNull(),
+  marksObtained: varchar("marks_obtained", { length: 20 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// Professional Experience
+export const candidateExperience = mysqlTable("candidate_experience", {
+  id: int("id").primaryKey().autoincrement(),
+  candidateId: int("candidate_id").references(() => candidates.id),
+  organizationName: varchar("organization_name", { length: 255 }).notNull(),
+  designation: varchar("designation", { length: 100 }).notNull(),
+  period: varchar("period", { length: 100 }).notNull(),
+  ctc: decimal("ctc", { precision: 10, scale: 2 }),
+  workLocation: varchar("work_location", { length: 255 }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// References
+export const candidateReferences = mysqlTable("candidate_references", {
+  id: int("id").primaryKey().autoincrement(),
+  candidateId: int("candidate_id").references(() => candidates.id),
+  name: varchar("name", { length: 100 }).notNull(),
+  designation: varchar("designation", { length: 100 }).notNull(),
+  company: varchar("company", { length: 255 }).notNull(),
+  contactNumber: varchar("contact_number", { length: 20 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// Interview Process
+export const interviews = mysqlTable("interviews", {
+  id: int("id").primaryKey().autoincrement(),
+  candidateId: int("candidate_id").references(() => candidates.id),
+  scheduledDate: datetime("scheduled_date").notNull(),
+  status: mysqlEnum("status", ["Scheduled", "Completed", "Cancelled", "No Show"]).default("Scheduled"),
+  finalDecision: mysqlEnum("final_decision", ["Selected", "Rejected", "Hold"]),
+  employmentType: mysqlEnum("employment_type", ["Regular", "Contractual"]),
+  departmentId: int("department_id"),
+  reportingTo: varchar("reporting_to", { length: 100 }),
+  joiningDate: datetime("joining_date"),
+  agreedCTC: decimal("agreed_ctc", { precision: 10, scale: 2 }),
+  probationPeriod: int("probation_period"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// Interview Rounds
+export const interviewRounds = mysqlTable("interview_rounds", {
+  id: int("id").primaryKey().autoincrement(),
+  interviewId: int("interview_id").references(() => interviews.id),
+  roundType: mysqlEnum("round_type", ["IT", "HR", "HOD", "Other"]).notNull(),
+  interviewerId: int("interviewer_id").references(() => employees.id),
+  remarks: text("remarks"),
+  status: mysqlEnum("status", ["Pending", "Passed", "Failed", "On Hold"]).default("Pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// ----------------------------------------------------------------------------------------------
+
 // User Authentication Schema
 export const users = mysqlTable("users", {
   id: int("id").primaryKey().autoincrement(),
