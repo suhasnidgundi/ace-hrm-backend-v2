@@ -1,0 +1,93 @@
+flowchart TD
+    Start([Candidate Discovery]) --> A[Job Opening Discovery]
+    
+    %% Discovery channels
+    A --> B1[LinkedIn QR Code]
+    A --> B2[Hospital Website]
+    A --> B3[Walk-in]
+    A --> B4[Job Portals]
+    
+    %% Application Process
+    B1 & B2 & B4 --> C1[Online Application Portal]
+    B3 --> C2[Physical Form/Digital Kiosk]
+    C2 --> C1
+    
+    %% Initial Form Submission
+    C1 --> D[Candidate Fills Basic Information]
+    D --> E{Email Exists?}
+    E -->|Yes| F[Login to Continue]
+    E -->|No| G[Register New Account]
+    F & G --> H[Complete Application Form]
+    
+    %% Application Sections
+    H --> I1[Personal Details]
+    I1 --> I2[Educational Qualifications]
+    I2 --> I3[Work Experience]
+    I3 --> I4[References]
+    
+    %% HR Review Process
+    I4 --> J[Application Submitted]
+    J --> K[HR Application Review]
+    K --> L{Meets Criteria?}
+    
+    %% Initial Screening
+    L -->|No| M[Automated Rejection Email]
+    L -->|Yes| N[HR Schedules Initial Interview]
+    
+    %% Interview Process
+    N --> O[Interview Scheduling Email]
+    O --> P[Candidate Confirms Schedule]
+    P --> Q[Initial HR Round]
+    
+    %% Assessment Process
+    Q --> R1[Technical Assessment]
+    Q --> R2[Typing Test]
+    Q --> R3[Aptitude Test]
+    R1 & R2 & R3 --> S[Department HOD Round]
+    
+    %% Selection Decision
+    S --> T{Final Decision}
+    T -->|Rejected| U[Rejection Email]
+    T -->|Selected| V[HR Sends Offer Letter]
+    T -->|Hold| W[Hold Email & Database Update]
+    
+    %% Post Selection
+    V --> X[Candidate Reviews Offer]
+    X --> Y{Accepts Offer?}
+    Y -->|Yes| Z[Onboarding Process]
+    Y -->|No| AA[Update Database Status]
+    
+    %% System States
+    style Start fill:#f9f,stroke:#333,stroke-width:4px
+    style M fill:#ff9999
+    style U fill:#ff9999
+    style Z fill:#99ff99
+    
+    %% Subgraph for System Actions
+    subgraph System_Actions
+        J
+        K
+        M
+        O
+        U
+        V
+        W
+        AA
+    end
+    
+    %% Subgraph for HR Actions
+    subgraph HR_Actions
+        N
+        Q
+        S
+        T
+    end
+    
+    %% Subgraph for Candidate Actions
+    subgraph Candidate_Actions
+        D
+        H
+        P
+        X
+        Y
+    end

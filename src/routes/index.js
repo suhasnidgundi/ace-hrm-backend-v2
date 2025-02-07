@@ -1,6 +1,7 @@
 import express from "express";
 import authRoutes from "./auth.routes.js";
 import employeeRoutes from "./employee.routes.js";
+import interviewRoutes from "./interview.routes.js";
 import candidateRoutes from "./candidate.routes.js";
 import { leaveRoutes } from "./leave.routes.js";
 import healthRoutes from "./health.routes.js";
@@ -36,7 +37,7 @@ v1Router.use("/candidates", candidateRoutes);
 // Protected routes
 v1Router.use("/auth", authRoutes);
 v1Router.use("/employees", authenticate, employeeRoutes);
-// v1Router.use("/interviews", authenticateToken, interviewRoutes);
+v1Router.use("/interviews", authenticateToken, interviewRoutes);
 v1Router.use("/leave", authenticateToken, leaveRoutes);
 v1Router.use("/health", healthRoutes);
 
