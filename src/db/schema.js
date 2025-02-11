@@ -21,11 +21,26 @@ export const candidates = mysqlTable("candidates", {
   email: varchar("email", { length: 255 }).unique().notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   dateOfBirth: datetime("date_of_birth").notNull(),
-  maritalStatus: mysqlEnum("marital_status", ["Single", "Married", "Divorced", "Separated", "Widowed"]),
+  maritalStatus: mysqlEnum("marital_status", [
+    "Single",
+    "Married",
+    "Divorced",
+    "Separated",
+    "Widowed",
+  ]),
   currentAddress: text("current_address"),
   permanentAddress: text("permanent_address"),
   referralSource: varchar("referral_source", { length: 100 }),
   postApplied: varchar("post_applied", { length: 100 }).notNull(),
+  verified: boolean("verified").default(false),
+  status: mysqlEnum("status", [
+    "APPLIED",
+    "SHORTLISTED",
+    "INTERVIEWING",
+    "SELECTED",
+    "REJECTED",
+  ]),
+  applicationDate: timestamp("application_date").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
@@ -72,7 +87,12 @@ export const interviews = mysqlTable("interviews", {
   id: int("id").primaryKey().autoincrement(),
   candidateId: int("candidate_id").references(() => candidates.id),
   scheduledDate: datetime("scheduled_date").notNull(),
-  status: mysqlEnum("status", ["Scheduled", "Completed", "Cancelled", "No Show"]).default("Scheduled"),
+  status: mysqlEnum("status", [
+    "Scheduled",
+    "Completed",
+    "Cancelled",
+    "No Show",
+  ]).default("Scheduled"),
   finalDecision: mysqlEnum("final_decision", ["Selected", "Rejected", "Hold"]),
   employmentType: mysqlEnum("employment_type", ["Regular", "Contractual"]),
   departmentId: int("department_id"),
@@ -91,7 +111,24 @@ export const interviewRounds = mysqlTable("interview_rounds", {
   roundType: mysqlEnum("round_type", ["IT", "HR", "HOD", "Other"]).notNull(),
   interviewerId: int("interviewer_id").references(() => employees.id),
   remarks: text("remarks"),
-  status: mysqlEnum("status", ["Pending", "Passed", "Failed", "On Hold"]).default("Pending"),
+  status: mysqlEnum("status", [
+    "Pending",
+    "Passed",
+    "Failed",
+    "On Hold",
+  ]).default("Pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+// Candidate Documents
+export const candidate_documents = mysqlTable("candidate_documents", {
+  documentId: int("document_id").primaryKey().autoincrement(),
+  candidateId: int("candidate_id").references(() => candidates.id),
+  documentType: varchar("document_type", { length: 50 }).notNull(), // Aadhar, PAN, etc.
+  documentNumber: varchar("document_number", { length: 50 }).notNull(),
+  filePath: varchar("file_path", { length: 255 }).notNull(), // Path to uploaded file
+  verified: boolean("verified").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });

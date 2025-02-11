@@ -2,6 +2,33 @@ import jwt from "jsonwebtoken";
 import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { eq } from "drizzle-orm"; // You were missing this import
+import { CustomError } from "../utils/customError.js";
+
+export const authenticateCandidate = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // Check if the Authorization header is present and correctly formatted
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new CustomError("Unauthorized: Token is required", 401);
+    }
+
+    const token = authHeader.split(" ")[1]; // Extract token after 'Bearer '
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (!decoded || !decoded.email) {
+      throw new CustomError("Unauthorized: Invalid token", 403);
+    }
+
+    req.candidate = decoded; // Attach the candidate details to the request
+    next(); // Continue to the next middleware/controller
+  } catch (error) {
+    return res.status(error.status || 401).json({
+      success: false,
+      message: error.message || "Unauthorized access",
+    });
+  }
+};
 
 export const authenticate = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");

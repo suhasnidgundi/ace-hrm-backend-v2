@@ -1,455 +1,148 @@
-import { db } from "../db/index.js";
-import {
-  candidates,
-  candidateQualifications,
-  candidateExperience,
-  candidateReferences,
-} from "../db/schema.js";
-import { eq, sql } from "drizzle-orm";
+import { candidateService } from "../services/candidate.service.js";
 import { logger } from "../config/logger.js";
+import { CustomError } from "../utils/customError.js";
 
-// Verify candidate by email
-export const verifyCandidate = async (req, res) => {
+export const getCandidatePersonalInformationByEmail = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email } = req.query;
+    if (!email) throw new CustomError("Email is required", 400);
 
-    // Check if candidate exists
-    const [existingCandidate] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.email, email))
-      .limit(1);
-
-    if (!existingCandidate) {
-      return res.json({
-        success: true,
-        isNewCandidate: true,
-        data: null,
-      });
+    // Ensure authenticated candidate is requesting their own data
+    if (req.candidate.email !== email) {
+      throw new CustomError(
+        "Unauthorized: Access denied to another candidate's data",
+        403
+      );
     }
 
-    // Get candidate's progress
-    const [qualifications] = await db
-      .select({ count: sql`count(*)` })
-      .from(candidateQualifications)
-      .where(eq(candidateQualifications.candidateId, existingCandidate.id));
-
-    const [experience] = await db
-      .select({ count: sql`count(*)` })
-      .from(candidateExperience)
-      .where(eq(candidateExperience.candidateId, existingCandidate.id));
-
-    const [references] = await db
-      .select({ count: sql`count(*)` })
-      .from(candidateReferences)
-      .where(eq(candidateReferences.candidateId, existingCandidate.id));
-
-    // Calculate completion percentage
-    const progress = {
-      personalInfo: existingCandidate ? 25 : 0,
-      qualifications: qualifications.count > 0 ? 25 : 0,
-      experience: experience.count > 0 ? 25 : 0,
-      references: references.count > 0 ? 25 : 0,
-    };
-
-    const completionPercentage = Object.values(progress).reduce(
-      (a, b) => a + b,
-      0
-    );
-
-    res.json({
+    const candidate = await candidateService.getCandidateByEmail(email);
+    return res.json({
       success: true,
-      isNewCandidate: false,
-      data: {
-        candidate: existingCandidate,
-        progress: {
-          ...progress,
-          total: completionPercentage,
-        },
-      },
+      isNewCandidate: !candidate,
+      data: candidate,
     });
   } catch (error) {
-    console.error("Verify candidate error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to verify candidate",
-    });
-  }
-};
-
-// Get candidate progress
-export const getCandidateProgress = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-
-    const [candidate] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.id, candidateId))
-      .limit(1);
-
-    if (!candidate) {
-      return res.status(404).json({
-        success: false,
-        message: "Candidate not found",
-      });
-    }
-
-    // Get completion status for each section
-    const [qualifications] = await db
-      .select()
-      .from(candidateQualifications)
-      .where(eq(candidateQualifications.candidateId, candidateId));
-
-    const [experience] = await db
-      .select()
-      .from(candidateExperience)
-      .where(eq(candidateExperience.candidateId, candidateId));
-
-    const [references] = await db
-      .select()
-      .from(candidateReferences)
-      .where(eq(candidateReferences.candidateId, candidateId));
-
-    res.json({
-      success: true,
-      data: {
-        personalInfo: {
-          completed: true,
-          data: candidate,
-        },
-        qualifications: {
-          completed: !!qualifications,
-          data: qualifications || null,
-        },
-        experience: {
-          completed: !!experience,
-          data: experience || null,
-        },
-        references: {
-          completed: !!references,
-          data: references || null,
-        },
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to get candidate progress",
-    });
+    logger.error("Error in getCandidatePersonalInformationByEmail:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
   }
 };
 
 export const registerCandidate = async (req, res) => {
   try {
-    const allowedMaritalStatus = [
-      "Single",
-      "Married",
-      "Divorced",
-      "Separated",
-      "Widowed",
-    ];
+    const { email, ...candidateData } = req.body;
+    if (!email) throw new CustomError("Email is required", 400);
 
-    // Validate marital status
-    if (
-      req.body.maritalStatus &&
-      !allowedMaritalStatus.includes(req.body.maritalStatus)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: `Invalid marital status. Allowed values are: ${allowedMaritalStatus.join(
-          ", "
-        )}`,
-      });
+    const candidate = await candidateService.upsertCandidate(
+      email,
+      candidateData
+    );
+    return res.json({ success: true, data: candidate });
+  } catch (error) {
+    logger.error("Error in registerCandidate:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
+  }
+};
+
+export const updateCandidateSection = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    const { section } = req.query;
+    const sectionData = req.body;
+
+    if (!candidateId) throw new CustomError("Candidate ID is required", 400);
+    if (!section) throw new CustomError("Section is required", 400);
+
+    let updatedData;
+    switch (section) {
+      case "qualifications":
+        updatedData = await candidateService.upsertQualification(
+          candidateId,
+          sectionData
+        );
+        break;
+      case "personalInformation":
+        updatedData = await candidateService.upsertPersonalInformation(
+          candidateId,
+          sectionData
+        );
+        break;
+      case "experience":
+        updatedData = await candidateService.upsertExperience(
+          candidateId,
+          sectionData
+        );
+        break;
+      case "references":
+        updatedData = await candidateService.upsertReference(
+          candidateId,
+          sectionData
+        );
+        break;
+      default:
+        throw new CustomError("Invalid section specified", 400);
     }
 
-    // Convert date string to Date object for dateOfBirth
-    const candidateData = {
-      ...req.body,
-      dateOfBirth: new Date(req.body.dateOfBirth),
-    };
-
-    // Insert the candidate
-    const result = await db.insert(candidates).values(candidateData).execute();
-
-    // Fetch the newly inserted candidate
-    const [newCandidate] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.id, result.insertId));
-
-    logger.info("Candidate registered successfully", {
-      candidateId: result.insertId,
-    });
-
-    res.json({
-      success: true,
-      data: newCandidate,
-    });
+    const progress = await candidateService.calculateProgress(candidateId);
+    return res.json({ success: true, data: updatedData, progress });
   } catch (error) {
-    logger.error("Register candidate error:", {
-      error: error.message,
-      stack: error.stack,
-      candidateData: req.body,
-    });
-
-    // Enhanced error handling
-    if (error.code === "WARN_DATA_TRUNCATED") {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid data format. Please check all field values match the required format.",
-        details: error.sqlMessage,
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to register candidate",
-    });
+    logger.error("Error in updateCandidateSection:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
   }
 };
 
-// Update candidate information
-export const updateCandidateInfo = async (req, res) => {
+export const getCandidateProfile = async (req, res) => {
   try {
     const { candidateId } = req.params;
-    const updateData = {
-      ...req.body,
-      dateOfBirth: req.body.dateOfBirth
-        ? new Date(req.body.dateOfBirth)
-        : undefined,
-    };
+    if (!candidateId) throw new CustomError("Candidate ID is required", 400);
 
-    // Update the candidate
-    await db
-      .update(candidates)
-      .set(updateData)
-      .where(eq(candidates.id, candidateId))
-      .execute();
-
-    // Fetch the updated candidate
-    const [updatedCandidate] = await db
-      .select()
-      .from(candidates)
-      .where(eq(candidates.id, candidateId));
-
-    if (!updatedCandidate) {
-      logger.warn("Candidate not found for update", { candidateId });
-      return res.status(404).json({
-        success: false,
-        message: "Candidate not found",
-      });
-    }
-
-    logger.info("Candidate updated successfully", { candidateId });
-
-    res.json({
-      success: true,
-      data: updatedCandidate,
-    });
+    const profile = await candidateService.getCandidateProfile(candidateId);
+    return res.json({ success: true, data: profile });
   } catch (error) {
-    logger.error("Update candidate error:", {
-      error: error.message,
-      stack: error.stack,
-      candidateId: req.params.candidateId,
-      updateData: req.body,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Failed to update candidate information",
-    });
+    logger.error("Error in getCandidateProfile:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
   }
 };
 
-// Add qualification
-export const addQualification = async (req, res) => {
+export const verifyCandidateEmail = async (req, res) => {
   try {
-    const { candidateId } = req.params;
-    const qualificationData = { ...req.body, candidateId };
+    const { email } = req.body;
+    if (!email) throw new CustomError("Email is required", 400);
 
-    // Insert qualification
-    const result = await db
-      .insert(candidateQualifications)
-      .values(qualificationData)
-      .execute();
-
-    // Fetch the newly inserted qualification
-    const [newQualification] = await db
-      .select()
-      .from(candidateQualifications)
-      .where(eq(candidateQualifications.id, result.insertId));
-
-    logger.info("Qualification added successfully", {
-      candidateId,
-      qualificationId: result.insertId,
-    });
-
-    res.json({
-      success: true,
-      data: newQualification,
-    });
+    const verificationToken = await candidateService.verifyCandidateEmail(
+      email
+    );
+    return res.status(200).json({ success: true, verificationToken });
   } catch (error) {
-    logger.error("Add qualification error:", {
-      error: error.message,
-      stack: error.stack,
-      candidateId: req.params.candidateId,
-      qualificationData: req.body,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Failed to add qualification",
-    });
+    logger.error("Error in verifyCandidateEmail:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
   }
 };
 
-// Get qualifications
-export const getQualifications = async (req, res) => {
+export const validateCandidateOTP = async (req, res) => {
   try {
-    const { candidateId } = req.params;
+    const { verificationToken, otp } = req.body;
+    if (!verificationToken || !otp)
+      throw new CustomError("Verification token and OTP are required", 400);
 
-    const qualifications = await db
-      .select()
-      .from(candidateQualifications)
-      .where(eq(candidateQualifications.candidateId, candidateId));
-
-    res.json({
-      success: true,
-      data: qualifications,
-    });
+    const accessToken = await candidateService.validateCandidateOTP(
+      verificationToken,
+      otp
+    );
+    return res.status(200).json({ success: true, accessToken });
   } catch (error) {
-    console.error("Get qualifications error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get qualifications",
-    });
-  }
-};
-
-// Add experience
-export const addExperience = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-    const experienceData = { ...req.body, candidateId };
-
-    // Insert experience
-    const result = await db
-      .insert(candidateExperience)
-      .values(experienceData)
-      .execute();
-
-    // Fetch the newly inserted experience
-    const [newExperience] = await db
-      .select()
-      .from(candidateExperience)
-      .where(eq(candidateExperience.id, result.insertId));
-
-    logger.info("Experience added successfully", {
-      candidateId,
-      experienceId: result.insertId,
-    });
-
-    res.json({
-      success: true,
-      data: newExperience,
-    });
-  } catch (error) {
-    logger.error("Add experience error:", {
-      error: error.message,
-      stack: error.stack,
-      candidateId: req.params.candidateId,
-      experienceData: req.body,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Failed to add experience",
-    });
-  }
-};
-
-// Get experience
-export const getExperience = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-
-    const experience = await db
-      .select()
-      .from(candidateExperience)
-      .where(eq(candidateExperience.candidateId, candidateId));
-
-    res.json({
-      success: true,
-      data: experience,
-    });
-  } catch (error) {
-    console.error("Get experience error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get experience",
-    });
-  }
-};
-
-// Add reference
-export const addReference = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-    const referenceData = { ...req.body, candidateId };
-
-    // Insert reference
-    const result = await db
-      .insert(candidateReferences)
-      .values(referenceData)
-      .execute();
-
-    // Fetch the newly inserted reference
-    const [newReference] = await db
-      .select()
-      .from(candidateReferences)
-      .where(eq(candidateReferences.id, result.insertId));
-
-    logger.info("Reference added successfully", {
-      candidateId,
-      referenceId: result.insertId,
-    });
-
-    res.json({
-      success: true,
-      data: newReference,
-    });
-  } catch (error) {
-    logger.error("Add reference error:", {
-      error: error.message,
-      stack: error.stack,
-      candidateId: req.params.candidateId,
-      referenceData: req.body,
-    });
-    res.status(500).json({
-      success: false,
-      message: "Failed to add reference",
-    });
-  }
-};
-
-// Get references
-export const getReferences = async (req, res) => {
-  try {
-    const { candidateId } = req.params;
-
-    const references = await db
-      .select()
-      .from(candidateReferences)
-      .where(eq(candidateReferences.candidateId, candidateId));
-
-    res.json({
-      success: true,
-      data: references,
-    });
-  } catch (error) {
-    console.error("Get references error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to get references",
-    });
+    logger.error("Error in validateCandidateOTP:", error);
+    return res
+      .status(error.status || 500)
+      .json({ success: false, message: error.message });
   }
 };

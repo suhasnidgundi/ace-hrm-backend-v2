@@ -3,6 +3,9 @@ import { users, refreshTokens } from "../db/schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
+import { redisService } from "../services/redis.service.js";
+import { logger } from "../config/logger.js";
+import { emailService } from "../services/email.service.js";
 
 // Constants for security settings
 export const SALT_ROUNDS = 12;
@@ -23,6 +26,7 @@ const isPasswordValid = (password) => {
 export const hashPassword = async (password) => {
   return await bcrypt.hash(password, SALT_ROUNDS);
 };
+
 
 const generateTokens = (user) => {
   const accessToken = jwt.sign(
@@ -294,3 +298,4 @@ export const refreshToken = async (req, res) => {
     });
   }
 };
+
