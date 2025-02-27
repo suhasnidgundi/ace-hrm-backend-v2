@@ -1,6 +1,4 @@
-import { employees } from "../db/schema.js";
-import { eq, sql } from "drizzle-orm";
-import db from "../db/index.js";
+import { employeeService } from "../services/employee.service.js";
 import { logger } from "../config/logger.js";
 
 export const createEmployee = async (req, res) => {
@@ -11,19 +9,10 @@ export const createEmployee = async (req, res) => {
       dateOfBirth: new Date(req.body.dateOfBirth)
     };
 
-    const result = await db.insert(employees)
-      .values(employeeData)
-      .execute();
-    
-    const insertedId = result.insertId;
+    const employee = await employeeService.createEmployee(employeeData);
 
-    const employee = await db
-      .select()
-      .from(employees)
-      .where(eq(employees.id, insertedId));
-
-    logger.info(`Employee created successfully with ID: ${insertedId}`);
-    res.status(201).json(employee[0]);
+    logger.info(`Employee created successfully with ID: ${employee.id}`);
+    res.status(201).json(employee);
   } catch (error) {
     logger.error('Employee Controller CreateEmployee:', {
       error: error.message,
@@ -33,73 +22,107 @@ export const createEmployee = async (req, res) => {
   }
 };
 
-
-// Add pagination
 export const getEmployees = async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const offset = (page - 1) * limit;
-
   try {
-    const employeesQuery = db
-      .select()
-      .from(employees)
-      .limit(limit)
-      .offset(offset);
-    const countQuery = db.select({ count: sql`count(*)` }).from(employees);
+    // Parse filter params - assuming filter comes as a JSON string in 's' parameter
+    // Similar to the format shown in your example
+    let filter = {};
+    if (req.query.s) {
+      try {
+        const searchParam = JSON.parse(req.query.s);
 
-    const [employeesList, total] = await Promise.all([
-      employeesQuery,
-      countQuery,
-    ]);
+        // Handle complex filters like {"$and":[{"role":{"$eq":"Employee"}}]}
+        if (searchParam.$and) {
+          searchParam.$and.forEach(condition => {
+            Object.entries(condition).forEach(([key, value]) => {
+              if (typeof value === 'object' && value.$eq) {
+                filter[key] = value.$eq;
+              } else {
+                filter[key] = value;
+              }
+            });
+          });
+        }
+      } catch (e) {
+        logger.warn('Failed to parse search filter', { error: e.message });
+      }
+    }
 
-    res.json({
-      data: employeesList,
-      pagination: {
-        current: page,
-        total: Math.ceil(total[0].count / limit),
-      },
-    });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const sort = req.query.sort || 'createdAt';
+    const order = req.query.order || 'desc';
+
+    // Check if request is specifically for managers
+    const role = filter.role || null;
+
+    // Get employees based on role filter
+    let result;
+    if (role === 'Manager') {
+      result = await employeeService.getManagers({
+        page, limit, search, sort, order, filter
+      });
+    } else if (role === 'Employee') {
+      result = await employeeService.getRegularEmployees({
+        page, limit, search, sort, order, filter
+      });
+    } else {
+      result = await employeeService.getEmployees({
+        page, limit, search, sort, order, filter
+      });
+    }
+
+    res.json(result);
   } catch (error) {
-    console.log("Employee Controller GetEmployees : ", error);
+    logger.error('Employee Controller GetEmployees:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message });
   }
 };
 
 export const getEmployee = async (req, res) => {
   try {
-    const employee = await db
-      .select()
-      .from(employees)
-      .where(eq("id", req.params.id))
-      .single();
+    const employee = await employeeService.getEmployeeById(req.params.id);
     res.json(employee);
   } catch (error) {
+    logger.error('Employee Controller GetEmployee:', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(404).json({ error: error.message });
+  }
+};
+
+export const getEmployeeById = async (req, res) => {
+  try {
+    const employee = await employeeService.getEmployeeById(req.params.id);
+
+    if (!employee) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    res.json(employee);
+  } catch (error) {
+    logger.error('Employee Controller GetEmployeeById:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message });
   }
 };
 
 export const updateEmployee = async (req, res) => {
   try {
-    // Convert date strings to Date objects if present
-    const employeeData = {
-      ...req.body,
-      dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : undefined
-    };
-
-    await db
-      .update(employees)
-      .set(employeeData)
-      .where(eq(employees.id, req.params.id))
-      .execute();
-
-    const updatedEmployee = await db
-      .select()
-      .from(employees)
-      .where(eq(employees.id, req.params.id));
+    const updatedEmployee = await employeeService.updateEmployee(
+      req.params.id,
+      req.body
+    );
 
     logger.info(`Employee updated successfully: ${req.params.id}`);
-    res.json(updatedEmployee[0]);
+    res.json(updatedEmployee);
   } catch (error) {
     logger.error('Employee Controller UpdateEmployee:', {
       error: error.message,
@@ -108,36 +131,50 @@ export const updateEmployee = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
 export const deleteEmployee = async (req, res) => {
   try {
-    await db.delete(employees).where(eq("id", req.params.id)).execute();
+    await employeeService.deleteEmployee(req.params.id);
     res.status(204).end();
   } catch (error) {
+    logger.error('Employee Controller DeleteEmployee:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message });
   }
 };
 
-export const getEmployeeById = async (req, res) => {
+export const getEmployeeStats = async (req, res) => {
   try {
-    const paramId = req.params.id;
-    let query = db.select().from(employees);
-
-    // Check if the id is numeric (primary key) or string (empId)
-    if (/^\d+$/.test(paramId)) {
-      query = query.where(eq(employees.id, parseInt(paramId)));
-    } else {
-      query = query.where(eq(employees.empId, paramId));
-    }
-
-    const employee = await query.limit(1);
-
-    if (!employee || employee.length === 0) {
-      return res.status(404).json({ error: "Employee not found" });
-    }
-
-    res.json(employee[0]);
+    const stats = await employeeService.getEmployeeStats();
+    res.json(stats);
   } catch (error) {
-    console.log("Employee Controller GetEmployeeById : ", error);
+    logger.error('Employee Controller GetEmployeeStats:', {
+      error: error.message,
+      stack: error.stack
+    });
+    res.status(500).json({ error: error.message });
+  }
+};
+
+export const getEmployeesByTeam = async (req, res) => {
+  try {
+    const teamId = req.params.teamId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const result = await employeeService.getEmployeesByTeam(teamId, {
+      page,
+      limit
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Employee Controller GetEmployeesByTeam:', {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message });
   }
 };

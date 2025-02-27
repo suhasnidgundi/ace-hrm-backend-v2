@@ -1,5 +1,5 @@
 import { db } from "../db/index.js";
-import { users, refreshTokens } from "../db/schema.js";
+import { users, refreshTokens, employees, employee_professional_details, employee_contacts, employee_leave_balances, teams, leave_types } from "../db/schema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { eq } from "drizzle-orm";
@@ -169,14 +169,9 @@ export const login = async (req, res) => {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     });
 
-    // Remove sensitive data
-    const { password: _, ...userWithoutPassword } = user;
-
     res.status(200).json({
-      success: true,
       accessToken,
       refreshToken,
-      user: userWithoutPassword,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -299,3 +294,187 @@ export const refreshToken = async (req, res) => {
   }
 };
 
+export const getMe = async (req, res) => {
+  try {
+    // Get user ID from token
+    const userId = req.user.id;
+
+    // Get base user data
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Get employee data
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(eq(employees.userId, userId))
+      .limit(1);
+
+    if (!employee) {
+      // Return basic user info if no employee record exists
+      const { password: _, ...userWithoutPassword } = user;
+      return res.json({
+        id: userId,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt
+      });
+    }
+
+    // Get employee professional details
+    const [professionalDetails] = await db
+      .select()
+      .from(employee_professional_details)
+      .where(eq(employee_professional_details.employeeId, employee.id))
+      .limit(1);
+
+    // Get employee contact details
+    const [contactDetails] = await db
+      .select()
+      .from(employee_contacts)
+      .where(eq(employee_contacts.employeeId, employee.id))
+      .limit(1);
+
+    // Get team info if available
+    let teamId = null;
+    if (professionalDetails && professionalDetails.departmentId) {
+      const [team] = await db
+        .select({ id: teams.id })
+        .from(teams)
+        .where(eq(teams.id, professionalDetails.departmentId))
+        .limit(1);
+
+      if (team) {
+        teamId = team.id;
+      }
+    }
+
+    // Calculate available leave days
+    let availableAnnualLeaveDays = 0;
+    const leaveBalances = await db
+      .select({
+        balance: employee_leave_balances.balance,
+        name: leave_types.name
+      })
+      .from(employee_leave_balances)
+      .innerJoin(leave_types, eq(employee_leave_balances.leaveTypeId, leave_types.id))
+      .where(eq(employee_leave_balances.employeeId, employee.id));
+
+    // Find annual leave in the balances
+    const annualLeave = leaveBalances.find(leave =>
+      leave.name.toLowerCase().includes('annual') ||
+      leave.name.toLowerCase().includes('vacation'));
+
+    if (annualLeave) {
+      availableAnnualLeaveDays = annualLeave.balance;
+    } else if (leaveBalances.length > 0) {
+      // If no specific annual leave found, use the first leave type's balance
+      availableAnnualLeaveDays = leaveBalances[0].balance;
+    } else {
+      // Default value if no leave balances are found
+      availableAnnualLeaveDays = 30;
+    }
+
+    // Construct the response object with the format requested
+    const response = {
+      id: userId,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      teamId: teamId,
+      avatarUrl: null, // Not in schema, could be added in future
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      jobTitle: professionalDetails ? "Not specified" : "Not specified", // Could be derived from designation in future
+      role: user.role,
+      email: user.email,
+      address: contactDetails ? contactDetails.address : null,
+      phone: contactDetails ? contactDetails.phone : null,
+      birthdate: employee.dateOfBirth,
+      links: [], // Not in schema, could be added in future
+      customFields: [
+        {
+          key: "Salutation",
+          value: employee.salutation || "Not specified"
+        },
+        {
+          key: "Middle Name",
+          value: employee.middleName || "Not specified"
+        },
+        {
+          key: "Marital Status",
+          value: employee.maritalStatus || "Not specified"
+        },
+        {
+          key: "Employee ID",
+          value: employee.empId
+        }
+      ],
+      availableAnnualLeaveDays: availableAnnualLeaveDays
+    };
+
+    // Add conditional fields
+    if (employee.spouseName) {
+      response.customFields.push({
+        key: "Spouse Name",
+        value: employee.spouseName
+      });
+    }
+
+    if (employee.fathersName) {
+      response.customFields.push({
+        key: "Father's Name",
+        value: employee.fathersName
+      });
+    }
+
+    if (employee.mothersName) {
+      response.customFields.push({
+        key: "Mother's Name",
+        value: employee.mothersName
+      });
+    }
+
+    if (professionalDetails) {
+      if (professionalDetails.dateOfJoining) {
+        response.customFields.push({
+          key: "Date of Joining",
+          value: professionalDetails.dateOfJoining
+        });
+      }
+
+      if (professionalDetails.branch) {
+        response.customFields.push({
+          key: "Branch",
+          value: professionalDetails.branch
+        });
+      }
+
+      if (professionalDetails.division) {
+        response.customFields.push({
+          key: "Division",
+          value: professionalDetails.division
+        });
+      }
+    }
+
+    res.json(response);
+  } catch (error) {
+    logger.error("Get me error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get user profile",
+      error: error.message
+    });
+  }
+}

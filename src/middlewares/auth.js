@@ -33,14 +33,10 @@ export const authenticateCandidate = (req, res, next) => {
 export const authenticate = async (req, res, next) => {
   const token = req.header("Authorization")?.replace("Bearer ", "");
 
-  console.log("Token: ", token);
-
   if (!token) return res.status(401).json({ error: "Access denied" });
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    console.log("Decoded: ", decoded);
 
     const [user] = await db
       .select()
@@ -67,11 +63,7 @@ export const authenticateToken = async (req, res, next) => {
 
     const token = authHeader.replace("Bearer ", "");
 
-    console.log("Token: ", token);
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    console.log("Decoded: ", decoded);
 
     const [user] = await db
       .select()

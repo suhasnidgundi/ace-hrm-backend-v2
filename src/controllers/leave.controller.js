@@ -1,6 +1,9 @@
 import { db } from "../db/index.js";
 import { and, eq } from "drizzle-orm";
 import { leave_applications, employees } from "../db/schema.js";
+import pkg from "winston";
+
+const { log } = pkg;
 
 export const createLeaveApplication = async (req, res) => {
   try {
@@ -17,7 +20,7 @@ export const createLeaveApplication = async (req, res) => {
 
     res.status(201).json(application[0]); // Return the inserted leave application
   } catch (error) {
-    console.log("Leave Controller CreateLeaveApplication : ", error);
+    log.error("Leave Controller CreateLeaveApplication : ", error);
     res.status(400).json({ error: error.message });
   }
 };
@@ -50,7 +53,7 @@ export const applyLeave = async (req, res) => {
       .returning();
     res.status(201).json(application);
   } catch (error) {
-    console.log("Leave Controller ApplyLeave : ", error);
+    log.error("Leave Controller ApplyLeave : ", error);
     res.status(400).json({ error: error.message });
   }
 };
@@ -70,7 +73,7 @@ export const updateLeaveStatus = async (req, res) => {
 
     res.json(updatedApplication[0]); // Return updated leave application
   } catch (error) {
-    console.log("Leave Controller UpdateLeaveStatus : ", error);
+    log.error("Leave Controller UpdateLeaveStatus : ", error);
     res.status(400).json({ error: error.message });
   }
 };

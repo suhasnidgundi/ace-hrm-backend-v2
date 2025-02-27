@@ -6,6 +6,7 @@ import candidateRoutes from "./candidate.routes.js";
 import { leaveRoutes } from "./leave.routes.js";
 import healthRoutes from "./health.routes.js";
 import { authenticate, authenticateToken } from "../middlewares/auth.js";
+import { getMe } from "../controllers/auth.controller.js";
 
 const router = express.Router();
 
@@ -40,6 +41,7 @@ v1Router.use("/employees", authenticate, employeeRoutes);
 v1Router.use("/interviews", authenticateToken, interviewRoutes);
 v1Router.use("/leave", authenticateToken, leaveRoutes);
 v1Router.use("/health", healthRoutes);
+v1Router.get("/me", authenticateToken, getMe);
 
 // Mount v1 routes under /api/v1
 router.use("/api/v1", v1Router);
